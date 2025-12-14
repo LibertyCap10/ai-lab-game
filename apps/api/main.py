@@ -13,7 +13,6 @@ import os
 
 from apps.api.db import connect  # or ensure_schema, depending on your structure
 
-
 from .db import (
     init_db,
     insert_rag_run,
@@ -30,9 +29,22 @@ DEFAULT_SCENARIO_ID = "dayzero-utility-outage"
 
 app = FastAPI(title="AI Lab – Day Zero API")
 
+# -----------------------------------------------------------------------------
+# CORS
+#
+# If you use a Next.js same-origin proxy (/api/* route handler), the browser will
+# only call your Next.js domain, so CORS is not strictly required. Keeping it
+# here is still useful for local dev, direct backend testing, Swagger UI, etc.
+#
+# Configure via env:
+#   CORS_ALLOW_ORIGINS="http://localhost:3000,http://127.0.0.1:3000,https://yourapp.vercel.app"
+# -----------------------------------------------------------------------------
+_allowed = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+allow_origins = [o.strip() for o in _allowed.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -331,7 +343,6 @@ def _truncate_all_tables(db_path: Path) -> Dict[str, Any]:
     return {"wiped_tables": wiped_tables}
 
 @app.post("/api/reset")
-@app.post("/api/reset")
 def reset_run(req: ResetRequest = Body(default=ResetRequest())):
     if not req.wipe_db:
         return {"ok": True, "wiped": False}
@@ -363,7 +374,6 @@ def reset_run(req: ResetRequest = Body(default=ResetRequest())):
             except Exception as e:
                 r["truncate_fallback_error"] = str(e)
 
-    # ✅ ADD THIS BLOCK RIGHT HERE
     # Recreate empty DB + schema so subsequent API calls don't 500
     try:
         conn = connect()
@@ -372,7 +382,6 @@ def reset_run(req: ResetRequest = Body(default=ResetRequest())):
         # Don't fail reset if schema init fails — frontend can still recover
         results.append({"schema_reinit_error": str(e)})
 
-    # ✅ THEN RETURN
     return {"ok": True, "wiped": True, "results": results}
 
 # ---------------- Telemetry helpers ----------------
@@ -805,7 +814,6 @@ def telemetry_timeseries(
         points.append(TelemetryPoint(timestamp=ts, value=v))
 
     return points
-
 
 
 @app.on_event("startup")

@@ -77,7 +77,6 @@ export default function TelemetryDashboard() {
   const [err, setErr] = useState<string | null>(null);
   const [simTraffic, setSimTraffic] = useState(true);
 
-  // ✅ Works in both DOM + Node typings (Vercel build)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -95,7 +94,9 @@ export default function TelemetryDashboard() {
   async function refresh() {
     try {
       setErr(null);
-      const s = await apiGet<TelemetrySummary>(`/api/telemetry/summary?window=${timeWindow}`);
+
+      // ✅ IMPORTANT: lib/api.ts already prefixes /api
+      const s = await apiGet<TelemetrySummary>(`/telemetry/summary?window=${timeWindow}`);
       setSummary(s);
 
       const metrics = ["latency_p95", "error_rate", "citation_coverage", "eval_pass_rate"] as const;
@@ -103,7 +104,9 @@ export default function TelemetryDashboard() {
       const out: Record<string, TelemetryPoint[]> = {};
       await Promise.all(
         metrics.map(async (m) => {
-          out[m] = await apiGet<TelemetryPoint[]>(`/api/telemetry/timeseries?metric=${m}&window=${timeWindow}`);
+          out[m] = await apiGet<TelemetryPoint[]>(
+            `/telemetry/timeseries?metric=${m}&window=${timeWindow}`
+          );
         })
       );
       setSeries(out);
@@ -126,7 +129,7 @@ export default function TelemetryDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, timeWindow]);
 
-  // Simulated traffic: posts synthetic telemetry based on your current "choices" (meters + RAG/Eval state)
+  // Simulated traffic: posts synthetic telemetry based on your current state
   useEffect(() => {
     if (!open || !simTraffic) {
       if (simRef.current) clearInterval(simRef.current);
@@ -157,7 +160,8 @@ export default function TelemetryDashboard() {
       );
       const escalated = Math.random() < escProb;
 
-      await apiPost("/api/telemetry/event", {
+      // ✅ IMPORTANT: no leading /api here
+      await apiPost("/telemetry/event", {
         scenarioId: "dayzero-utility-outage",
         agentId: "sim",
         eventType: "response",
@@ -172,12 +176,9 @@ export default function TelemetryDashboard() {
       });
     }
 
-    // ✅ Use global setInterval/clearInterval (typed to ReturnType<typeof setInterval>)
     if (simRef.current) clearInterval(simRef.current);
     simRef.current = setInterval(() => {
-      tick().catch(() => {
-        /* ignore */
-      });
+      tick().catch(() => {});
     }, 1600);
 
     return () => {
@@ -325,72 +326,28 @@ export default function TelemetryDashboard() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.04)",
-              }}
-            >
+            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
               <div style={{ fontSize: 11, opacity: 0.85 }}>Latency (p95)</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
-                {formatMs(summary?.latencyP95 ?? null)}
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <Sparkline data={series["latency_p95"] || []} />
-              </div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{formatMs(summary?.latencyP95 ?? null)}</div>
+              <div style={{ marginTop: 6 }}><Sparkline data={series["latency_p95"] || []} /></div>
             </div>
 
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.04)",
-              }}
-            >
+            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
               <div style={{ fontSize: 11, opacity: 0.85 }}>Error rate</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
-                {summary ? pct(summary.errorRate) : "—"}
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <Sparkline data={series["error_rate"] || []} />
-              </div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{summary ? pct(summary.errorRate) : "—"}</div>
+              <div style={{ marginTop: 6 }}><Sparkline data={series["error_rate"] || []} /></div>
             </div>
 
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.04)",
-              }}
-            >
+            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
               <div style={{ fontSize: 11, opacity: 0.85 }}>Citation coverage</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
-                {summary ? pct(summary.citationCoverage) : "—"}
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <Sparkline data={series["citation_coverage"] || []} />
-              </div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{summary ? pct(summary.citationCoverage) : "—"}</div>
+              <div style={{ marginTop: 6 }}><Sparkline data={series["citation_coverage"] || []} /></div>
             </div>
 
-            <div
-              style={{
-                padding: 12,
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.04)",
-              }}
-            >
+            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
               <div style={{ fontSize: 11, opacity: 0.85 }}>Eval pass rate</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
-                {evalRes ? `${evalRes.passRate}%` : "—"}
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <Sparkline data={series["eval_pass_rate"] || []} />
-              </div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{evalRes ? `${evalRes.passRate}%` : "—"}</div>
+              <div style={{ marginTop: 6 }}><Sparkline data={series["eval_pass_rate"] || []} /></div>
             </div>
           </div>
 

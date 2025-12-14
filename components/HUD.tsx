@@ -11,6 +11,8 @@ import ReleaseChecklist from "./ReleaseChecklist";
 import BookViewer from "./BookViewer";
 import ArtifactBrowser from "./ArtifactBrowser";
 import TelemetryDashboard from "./TelemetryDashboard";
+import WhiteboardPanel from "./WhiteboardPanel"; // ✅ ADD
+
 
 const mono =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
@@ -393,6 +395,7 @@ export default function HUD() {
       <BookViewer />
       <ArtifactBrowser />
       <TelemetryDashboard />
+      <WhiteboardPanel />
     </>
   );
 }
