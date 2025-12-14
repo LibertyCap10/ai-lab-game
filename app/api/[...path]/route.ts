@@ -3,28 +3,24 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 /**
- * Local dev:
- *   API_BASE_URL=http://127.0.0.1:8000
- *
- * Single Vercel deployment:
- *   leave API_BASE_URL unset -> proxy to same-origin /backend (vercel.json rewrite -> python function)
+ * We proxy:
+ *   browser -> /api/<path>
+ * to:
+ *   local dev -> http://127.0.0.1:8000/api/<path>
+ *   vercel    -> <same-origin>/api/backend/api/<path>
  */
 function getUpstreamBase(req: NextRequest): string {
   const envBase = process.env.API_BASE_URL || process.env.FASTAPI_BASE_URL;
   if (envBase) return envBase.replace(/\/$/, "");
-  return req.nextUrl.origin.replace(/\/$/, "") + "/backend";
+  return req.nextUrl.origin.replace(/\/$/, "") + "/api/backend";
 }
 
 function buildUpstreamUrl(req: NextRequest, pathParts: string[]) {
   const upstreamBase = getUpstreamBase(req);
-
-  // If someone accidentally calls /api/api/..., strip the leading "api"
-  const normalized = pathParts[0] === "api" ? pathParts.slice(1) : pathParts;
-
-  const upstreamPath = normalized.map(encodeURIComponent).join("/");
+  const upstreamPath = pathParts.map(encodeURIComponent).join("/");
   const url = new URL(`${upstreamBase}/api/${upstreamPath}`);
 
-  // preserve query string
+  // Preserve query string
   req.nextUrl.searchParams.forEach((v, k) => url.searchParams.append(k, v));
   return url;
 }
@@ -39,7 +35,11 @@ function filterRequestHeaders(headers: Headers) {
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
-  const upstreamUrl = buildUpstreamUrl(req, path);
+
+  // Guard: if someone accidentally calls /api/api/..., strip the leading "api"
+  const normalizedPath = path[0] === "api" ? path.slice(1) : path;
+
+  const upstreamUrl = buildUpstreamUrl(req, normalizedPath);
 
   const method = req.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
@@ -52,16 +52,17 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   };
 
   if (hasBody) {
-    // Node/undici requires duplex when streaming a body
+    // Node fetch requires duplex when streaming a body (undici).
     init.body = req.body;
     init.duplex = "half";
   }
 
   const upstreamRes = await fetch(upstreamUrl, init);
+  const resHeaders = new Headers(upstreamRes.headers);
 
   return new NextResponse(upstreamRes.body, {
     status: upstreamRes.status,
-    headers: upstreamRes.headers,
+    headers: resHeaders,
   });
 }
 

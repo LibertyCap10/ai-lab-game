@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/backend/(.*)", "destination": "/api/index.py" }
+    { "source": "/backend/:path*", "destination": "/api/backend/:path*" }
   ]
 }
