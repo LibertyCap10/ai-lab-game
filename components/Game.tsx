@@ -12,8 +12,6 @@ type AgentResponse = {
   effects?: { reliability?: number; cost?: number; risk?: number; regHeat?: number };
 };
 
-type WhiteboardResponse = AgentResponse & { verdict: RefereeVerdict; reasons: string[] };
-
 type Interactable = {
   id: string;
   name: string;
@@ -28,18 +26,16 @@ type Interactable = {
 const ROOM_W = 640;
 const ROOM_H = 384;
 
-function isAnyOverlayOpen() {
+function isBlockingOverlayOpen() {
   const s = useGameStore.getState();
+
+  // ✅ Only "big / full-screen / blocking" overlays stop movement.
+  // Dialogue + small panels should NOT block movement.
   return (
-    !!s.dialogue ||
     s.showTelemetryDashboard ||
     s.showArtifactBrowser ||
     s.showBookViewer ||
     s.showReleaseChecklist ||
-    s.showEvalResults ||
-    s.showRagResults ||
-    s.showEvalPanel ||
-    s.showRagPanel ||
     s.showWhiteboard ||
     !!s.releaseReview
   );
@@ -48,7 +44,6 @@ function isAnyOverlayOpen() {
 export default function Game() {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // Stable actions
   const setDialogue = useGameStore((s) => s.setDialogue);
   const applyEffects = useGameStore((s) => s.applyEffects);
   const markTalkedTo = useGameStore((s) => s.markTalkedTo);
@@ -61,19 +56,38 @@ export default function Game() {
   const setShowTelemetryDashboard = useGameStore((s) => s.setShowTelemetryDashboard);
   const setShowWhiteboard = useGameStore((s) => s.setShowWhiteboard);
 
-  const setVerdict = useGameStore((s) => s.setVerdict);
-  const setReleaseReview = useGameStore((s) => s.setReleaseReview);
-
   const [bootError, setBootError] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
 
-  // ESC => pause menu (but do NOT fight other modals; HUD handles those)
+  // Touch input state (from TouchControls)
+  const touchMoveRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const touchInteractPulseRef = useRef(false);
+
+  useEffect(() => {
+    const onMove = (e: any) => {
+      const dx = Number(e?.detail?.dx ?? 0);
+      const dy = Number(e?.detail?.dy ?? 0);
+      touchMoveRef.current = { dx, dy };
+    };
+    const onInteract = () => {
+      touchInteractPulseRef.current = true;
+    };
+
+    window.addEventListener("ai-lab-move" as any, onMove);
+    window.addEventListener("ai-lab-interact" as any, onInteract);
+    return () => {
+      window.removeEventListener("ai-lab-move" as any, onMove);
+      window.removeEventListener("ai-lab-interact" as any, onInteract);
+    };
+  }, []);
+
+  // ESC => pause menu, but don't fight the HUD's ESC overlay closer
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
 
-      // If a modal/dialogue is open, let HUD's ESC handler close it instead
-      if (isAnyOverlayOpen()) return;
+      // Let HUD close overlays first; only open Pause if nothing blocking is open.
+      if (isBlockingOverlayOpen()) return;
 
       e.preventDefault();
       setPaused((p) => !p);
@@ -85,7 +99,6 @@ export default function Game() {
 
   const doReset = async () => {
     try {
-      // ✅ IMPORTANT: lib/api.ts already prefixes /api
       await apiPost("/reset", { wipe_db: true });
     } catch (e) {
       console.warn("Backend reset failed, continuing with client reset", e);
@@ -100,10 +113,7 @@ export default function Game() {
 
   useEffect(() => {
     let destroyed = false;
-
     let app: PIXI.Application | null = null;
-
-    // cleanup closures
     let cleanup: (() => void) | null = null;
 
     async function init() {
@@ -112,9 +122,7 @@ export default function Game() {
         const mount = mountRef.current;
         if (!mount) return;
 
-        // Pixi v8 prefers `new Application()` + `await app.init()`
         app = new PIXI.Application();
-
         await (app as any).init?.({
           width: window.innerWidth,
           height: window.innerHeight,
@@ -126,15 +134,10 @@ export default function Game() {
 
         if (destroyed || !app) return;
 
-        // Support Pixi v8 (canvas) and older shape (view)
         const canvas: HTMLCanvasElement | undefined =
           (app as any).canvas ?? (app as any).view ?? (app as any).renderer?.view;
 
-        if (!canvas) {
-          throw new Error(
-            "PIXI did not create a canvas element. Verify pixi.js version and Application init."
-          );
-        }
+        if (!canvas) throw new Error("PIXI did not create a canvas element.");
 
         mount.innerHTML = "";
         mount.appendChild(canvas);
@@ -142,6 +145,7 @@ export default function Game() {
         const world = new PIXI.Container();
         app.stage.addChild(world);
 
+        // Room / world
         const floor = new PIXI.Graphics().rect(0, 0, ROOM_W, ROOM_H).fill(0x0b1226);
         world.addChild(floor);
 
@@ -217,18 +221,28 @@ export default function Game() {
         hint.alpha = 0;
         world.addChild(hint);
 
-        // Center the room in the viewport
+        // ✅ Responsive fit: scale the room to fit the viewport
         const positionWorld = () => {
           if (!app) return;
-          const w = (app as any).renderer?.width ?? window.innerWidth;
-          const h = (app as any).renderer?.height ?? window.innerHeight;
-          world.x = Math.max(0, Math.floor((w - ROOM_W) / 2));
-          world.y = Math.max(0, Math.floor((h - ROOM_H) / 2));
+          const rw = (app as any).renderer?.width ?? window.innerWidth;
+          const rh = (app as any).renderer?.height ?? window.innerHeight;
+
+          const pad = 12;
+          const availableW = Math.max(1, rw - pad * 2);
+          const availableH = Math.max(1, rh - pad * 2);
+
+          const scale = Math.min(availableW / ROOM_W, availableH / ROOM_H, 1.35);
+          world.scale.set(scale);
+
+          const scaledW = ROOM_W * scale;
+          const scaledH = ROOM_H * scale;
+
+          world.x = Math.floor((rw - scaledW) / 2);
+          world.y = Math.floor((rh - scaledH) / 2);
         };
 
         const onResize = () => {
           if (!app) return;
-          // resize canvas to window
           (app as any).renderer?.resize?.(window.innerWidth, window.innerHeight);
           positionWorld();
         };
@@ -282,7 +296,6 @@ export default function Game() {
           }
 
           try {
-            // ✅ IMPORTANT: lib/api.ts already prefixes /api
             const data = await apiGet<AgentResponse>(`/agent/${it.id}`);
             markTalkedTo(it.id);
             if (data.effects) applyEffects(data.effects);
@@ -297,22 +310,39 @@ export default function Game() {
 
         const tick = () => {
           if (!app) return;
-          if (paused || isAnyOverlayOpen()) return;
+          if (paused) return;
+
+          // ✅ Only block movement for big overlays
+          if (isBlockingOverlayOpen()) return;
 
           const speed = 2.35;
-          const dx = (keys["d"] || keys["arrowright"] ? 1 : 0) - (keys["a"] || keys["arrowleft"] ? 1 : 0);
-          const dy = (keys["s"] || keys["arrowdown"] ? 1 : 0) - (keys["w"] || keys["arrowup"] ? 1 : 0);
+
+          const kx =
+            (keys["d"] || keys["arrowright"] ? 1 : 0) - (keys["a"] || keys["arrowleft"] ? 1 : 0);
+          const ky =
+            (keys["s"] || keys["arrowdown"] ? 1 : 0) - (keys["w"] || keys["arrowup"] ? 1 : 0);
+
+          const { dx: tx, dy: ty } = touchMoveRef.current;
+
+          const dx = kx + tx;
+          const dy = ky + ty;
 
           if (dx || dy) {
-            const nx = player.x + dx * speed;
-            const ny = player.y + dy * speed;
+            // normalize diagonal
+            const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+            const ndx = dx / mag;
+            const ndy = dy / mag;
+
+            const nx = player.x + ndx * speed;
+            const ny = player.y + ndy * speed;
+
             if (!collides(nx, player.y)) player.x = nx;
             if (!collides(player.x, ny)) player.y = ny;
           }
 
           const near = findNearest();
           if (near) {
-            hint.text = `Press SPACE to interact: ${near.name}`;
+            hint.text = `Interact: ${near.name}`;
             hint.alpha = 1;
           } else {
             hint.text = "";
@@ -320,8 +350,12 @@ export default function Game() {
           }
 
           const space = !!keys[" "];
-          if (space && !spaceLatch) {
-            spaceLatch = true;
+          const touchInteract = touchInteractPulseRef.current;
+
+          if (touchInteract) touchInteractPulseRef.current = false;
+
+          if ((space && !spaceLatch) || touchInteract) {
+            if (space && !spaceLatch) spaceLatch = true;
             if (near) interact(near).catch(() => {});
           }
           if (!space) spaceLatch = false;
@@ -364,8 +398,6 @@ export default function Game() {
     setShowArtifactBrowser,
     setShowTelemetryDashboard,
     setShowWhiteboard,
-    setVerdict,
-    setReleaseReview,
   ]);
 
   return (
@@ -393,7 +425,7 @@ export default function Game() {
             top: 14,
             left: "50%",
             transform: "translateX(-50%)",
-            zIndex: 50,
+            zIndex: 60,
             background: "rgba(127,29,29,0.9)",
             border: "2px solid rgba(248,113,113,0.9)",
             color: "#fff",
