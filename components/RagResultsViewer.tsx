@@ -21,16 +21,19 @@ export default function RagResultsViewer() {
 
   return (
     <div
+      // ...everything else unchanged...
+
       style={{
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.55)",
-        zIndex: 45,
+        zIndex: 90, // ✅ was 45
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: 16
       }}
+
       onClick={() => setOpen(false)}
     >
       <div

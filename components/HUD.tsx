@@ -112,16 +112,22 @@ export default function HUD() {
 
       e.preventDefault();
 
-      // Close order: dialogue first, then highest-level modals
+      // Close order: top-most first
       if (dialogue) return setDialogue(null);
+
+      // detail viewers ABOVE the artifact browser
+      if (showEvalResults) return setShowEvalResults(false);
+      if (showRagResults) return setShowRagResults(false);
+
       if (showTelemetryDashboard) return setShowTelemetryDashboard(false);
       if (showArtifactBrowser) return setShowArtifactBrowser(false);
       if (showBookViewer) return setShowBookViewer(false);
       if (showReleaseChecklist) return setShowReleaseChecklist(false);
-      if (showEvalResults) return setShowEvalResults(false);
-      if (showRagResults) return setShowRagResults(false);
+      if (showWhiteboard) return setShowWhiteboard(false);
+
       if (showEvalPanel) return setShowEvalPanel(false);
       if (showRagPanel) return setShowRagPanel(false);
+
     };
 
     window.addEventListener("keydown", onKeyDown);

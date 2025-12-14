@@ -26,7 +26,7 @@ export default function EvalResultsViewer() {
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.55)",
-        zIndex: 46,
+        zIndex: 91,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

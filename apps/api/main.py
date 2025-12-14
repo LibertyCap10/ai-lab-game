@@ -653,31 +653,80 @@ def whiteboard(req: WhiteboardRequest):
 
 @app.get("/api/artifacts/rag")
 def artifacts_rag(limit: int = 50):
-    return [
-        {
-            "id": r["id"],
-            "createdAt": r["created_at"],
-            "passed": r["passed"],
-            "score": r["score"],
-            "config": r["config"],
-        }
-        for r in list_rag_runs(limit)
-    ]
+    """List recent RAG runs (summary)."""
+    runs = list_rag_runs(limit)
+    out = []
+    for r in runs:
+        out.append(
+            {
+                "id": r["id"],
+                # Provide both keys for compatibility with older UIs.
+                "created_at": r["created_at"],
+                "createdAt": r["created_at"],
+                "passed": r["passed"],
+                "score": r["score"],
+                "config": r["config"],
+            }
+        )
+    return out
+
+
+@app.get("/api/artifacts/rag/{run_id}")
+def artifact_rag(run_id: str):
+    """Get a single RAG run (full)."""
+    r = get_rag_run(run_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="RAG artifact not found")
+    return {
+        "id": r["id"],
+        "created_at": r["created_at"],
+        "createdAt": r["created_at"],
+        "passed": r["passed"],
+        "score": r["score"],
+        "config": r["config"],
+        "answer": r["answer"],
+        "citations": r["citations"],
+        "retrieved": r["retrieved"],
+    }
 
 
 @app.get("/api/artifacts/eval")
 def artifacts_eval(limit: int = 50):
-    return [
-        {
-            "id": r["id"],
-            "createdAt": r["created_at"],
-            "passRate": r["passRate"],
-            "ragRunId": r["ragRunId"],
-            "ragScore": r["ragScore"],
-            "ragPassed": r["ragPassed"],
-        }
-        for r in list_eval_runs(limit)
-    ]
+    """List recent Eval runs (summary)."""
+    runs = list_eval_runs(limit)
+    out = []
+    for r in runs:
+        out.append(
+            {
+                "id": r["id"],
+                "created_at": r["created_at"],
+                "createdAt": r["created_at"],
+                "passRate": r["passRate"],
+                "ragRunId": r.get("ragRunId"),
+                "ragScore": r["ragScore"],
+                "ragPassed": r["ragPassed"],
+            }
+        )
+    return out
+
+
+@app.get("/api/artifacts/eval/{run_id}")
+def artifact_eval(run_id: str):
+    """Get a single Eval run (full)."""
+    r = get_eval_run(run_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Eval artifact not found")
+    return {
+        "id": r["id"],
+        "created_at": r["created_at"],
+        "createdAt": r["created_at"],
+        "passRate": r["passRate"],
+        "failures": r["failures"],
+        "ragRunId": r.get("ragRunId"),
+        "ragScore": r["ragScore"],
+        "ragPassed": r["ragPassed"],
+    }
+
 
 
 # ---------------- Telemetry API (v1.10) ----------------
