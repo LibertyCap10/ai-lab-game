@@ -98,6 +98,10 @@ type State = {
   showEvalPanel: boolean;
   setShowEvalPanel: (v: boolean) => void;
 
+  // Whiteboard / referee overlay
+  showWhiteboard: boolean;
+  setShowWhiteboard: (v: boolean) => void;
+
   applyEffects: (effects?: Partial<Meters>) => void;
 };
 
@@ -112,7 +116,7 @@ export const useGameStore = create<State>((set) => ({
       "Must cite evidence when recommending steps",
       "Must escalate if uncertain or missing required context",
       "Target p95 latency < 800ms",
-      "No sensitive data leaves region"
+      "No sensitive data leaves region",
     ],
     winConditions: [
       "Talk to all workstations",
@@ -120,8 +124,8 @@ export const useGameStore = create<State>((set) => ({
       "Eval suite pass-rate ≥ 80%",
       "Whiteboard verdict is SHIP",
       "Risk ≤ 60 and Reg Heat ≤ 60",
-      "Reliability ≥ 55"
-    ]
+      "Reliability ≥ 55",
+    ],
   },
   meters: { reliability: 62, cost: 36, risk: 44, regHeat: 28 },
 
@@ -167,6 +171,9 @@ export const useGameStore = create<State>((set) => ({
   showEvalPanel: false,
   setShowEvalPanel: (showEvalPanel) => set({ showEvalPanel }),
 
+  showWhiteboard: false,
+  setShowWhiteboard: (showWhiteboard) => set({ showWhiteboard }),
+
   applyEffects: (effects) =>
     set((s) => {
       if (!effects) return s;
@@ -176,5 +183,5 @@ export const useGameStore = create<State>((set) => ({
         m[k] = clamp(m[k] + delta);
       });
       return { meters: m };
-    })
+    }),
 }));
