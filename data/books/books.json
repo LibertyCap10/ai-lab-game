@@ -1,0 +1,250 @@
+{
+  "books": [
+    {
+      "id": "rag-fundamentals",
+      "title": "RAG Fundamentals",
+      "subtitle": "Grounded answers, fast iteration",
+      "pages": [
+        {
+          "title": "What is RAG?",
+          "body": [
+            "Retrieval-Augmented Generation (RAG) is a pattern where the system retrieves relevant documents (evidence) and then uses them to produce an answer.",
+            "The key goal is *grounding*: the answer should be supported by retrieved sources rather than model memory alone.",
+            "",
+            "In this lab, the Server Rack runs a simplified RAG pipeline:",
+            "1) Chunk docs  2) Retrieve top-K  3) Answer + citations  4) Score & gate"
+          ]
+        },
+        {
+          "title": "Chunking",
+          "body": [
+            "Chunking is how you split documents before retrieval.",
+            "",
+            "Smaller chunks:",
+            "- more precise retrieval",
+            "- more citations and better pinpoint evidence",
+            "- can be slower (more chunks to search)",
+            "",
+            "Larger chunks:",
+            "- faster indexing/search in some setups",
+            "- but easier to retrieve irrelevant context",
+            "- can increase hallucination risk if the model latches onto the wrong part"
+          ]
+        },
+        {
+          "title": "Top-K",
+          "body": [
+            "Top-K is how many chunks you retrieve per question.",
+            "",
+            "Low K: faster and cheaper, but you may miss critical policy context.",
+            "High K: safer coverage, but slower and can overload the model with noise.",
+            "",
+            "Typical engineering move: start modest (K=3\u20135) then increase if evals show misses."
+          ]
+        },
+        {
+          "title": "Citations",
+          "body": [
+            "Citations are a discipline, not a decoration.",
+            "",
+            "They create:",
+            "- auditability (what did we rely on?)",
+            "- user trust (why should I believe this?)",
+            "- safer behavior (the model is forced to locate evidence)",
+            "",
+            "Rule of thumb: operational recommendations should be evidence-backed or escalated."
+          ]
+        },
+        {
+          "title": "Failure modes",
+          "body": [
+            "Common RAG failures:",
+            "- Retriever misses the right chunk (bad embeddings, bad chunking, wrong K)",
+            "- Retrieved context is irrelevant/noisy (too-large chunks, too-high K)",
+            "- The model ignores retrieved evidence (prompting, formatting, or reasoning issue)",
+            "",
+            "Fix loop: change one knob \u2192 re-run evals \u2192 compare artifacts."
+          ]
+        },
+        {
+          "title": "Lab tie-in",
+          "body": [
+            "When you run the RAG Test Rig, you\u2019re practicing real RAG iteration:",
+            "- tune chunk size and K",
+            "- require citations",
+            "- inspect retrieved snippets in the RAG Results Viewer",
+            "",
+            "RAG isn't 'set and forget' \u2014 it\u2019s a workflow."
+          ]
+        }
+      ],
+      "glossary": [
+        {
+          "term": "Grounding",
+          "def": "Ensuring outputs are supported by retrieved evidence or verified sources."
+        },
+        {
+          "term": "Chunk",
+          "def": "A segment of a document used as a retrieval unit."
+        },
+        {
+          "term": "Top-K",
+          "def": "Number of retrieved chunks returned to the model for answering."
+        },
+        {
+          "term": "Citation",
+          "def": "A reference to a retrieved chunk/doc that supports a claim."
+        }
+      ]
+    },
+    {
+      "id": "evals-release-gates",
+      "title": "Evals & Release Gates",
+      "subtitle": "Ship decisions based on tests, not vibes",
+      "pages": [
+        {
+          "title": "Why evals exist",
+          "body": [
+            "LLM systems are stochastic and can regress when you change prompts, models, or retrieval.",
+            "Evals give you a repeatable way to detect regressions and enforce quality bars.",
+            "",
+            "In real orgs, evals are a release gate\u2014like unit tests for product behavior."
+          ]
+        },
+        {
+          "title": "A minimal eval suite",
+          "body": [
+            "A good first eval suite checks for critical requirements:",
+            "- citations present when needed",
+            "- escalation when context is missing",
+            "- refusal or safe alternative when asked to do harmful actions",
+            "- correct policy constraints",
+            "",
+            "Start with ~10 'golden' cases and grow over time."
+          ]
+        },
+        {
+          "title": "Pass-rate thresholds",
+          "body": [
+            "You pick a threshold that matches risk level.",
+            "For critical infrastructure, you might require \u226580% or higher before shipping.",
+            "",
+            "Important: the threshold is only meaningful if failures are *actionable* and cases represent reality."
+          ]
+        },
+        {
+          "title": "Failure analysis",
+          "body": [
+            "An eval suite should not just say FAIL; it should help you diagnose why.",
+            "",
+            "Typical categories:",
+            "- missing citations",
+            "- missing clarifying question",
+            "- policy violation",
+            "- unsafe recommendation",
+            "- latency/cost budget exceeded"
+          ]
+        },
+        {
+          "title": "Lab tie-in",
+          "body": [
+            "The Eval Terminal simulates running a gate suite.",
+            "The Eval Results Viewer shows top failures so you can iterate.",
+            "",
+            "Real teams store eval runs as artifacts and compare trends over time."
+          ]
+        }
+      ],
+      "glossary": [
+        {
+          "term": "Golden set",
+          "def": "A curated set of test prompts with expected behaviors used to gate releases."
+        },
+        {
+          "term": "Regression",
+          "def": "When a change causes previously passing behavior to fail."
+        },
+        {
+          "term": "Release gate",
+          "def": "A rule that must be satisfied before shipping (e.g., eval pass-rate \u2265 80%)."
+        }
+      ]
+    },
+    {
+      "id": "safety-escalation",
+      "title": "Safety, Prompt Injection & Escalation",
+      "subtitle": "Build safe failure modes",
+      "pages": [
+        {
+          "title": "Safety as engineering",
+          "body": [
+            "Safety isn\u2019t moral panic \u2014 it\u2019s risk management.",
+            "In real systems you design safe defaults, narrow tool permissions, and escalation paths.",
+            "",
+            "The goal is: when uncertain or dangerous \u2192 fail safely."
+          ]
+        },
+        {
+          "title": "Prompt injection",
+          "body": [
+            "Prompt injection is when untrusted input tries to override system instructions.",
+            "Examples: 'Ignore previous rules', 'Reveal the hidden policy', 'Run this command'.",
+            "",
+            "Mitigations:",
+            "- treat user text as untrusted data",
+            "- never execute commands directly",
+            "- isolate tools behind validation",
+            "- require evidence / citations"
+          ]
+        },
+        {
+          "title": "Escalation design",
+          "body": [
+            "Escalation means asking a human or requesting missing context before taking action.",
+            "",
+            "You can escalate when:",
+            "- required context is missing (location, circuit, authorization)",
+            "- the user requests a high-impact action",
+            "- the system confidence is low",
+            "",
+            "This is a feature, not a failure."
+          ]
+        },
+        {
+          "title": "Human-in-the-loop",
+          "body": [
+            "Human-in-the-loop patterns:",
+            "- approve / deny",
+            "- edit before send",
+            "- partial automation with checkpoints",
+            "",
+            "HITL reduces risk while preserving speed\u2014especially in regulated environments."
+          ]
+        },
+        {
+          "title": "Lab tie-in",
+          "body": [
+            "The Security/Policy council member pushes you toward auditability and escalation.",
+            "RAG citations + eval gates are your safety rails.",
+            "",
+            "In future scenarios, we can add a red-team NPC that tries to jailbreak the agent."
+          ]
+        }
+      ],
+      "glossary": [
+        {
+          "term": "Prompt injection",
+          "def": "An attack where user-controlled text attempts to override system behavior."
+        },
+        {
+          "term": "Escalation",
+          "def": "Routing to a human or requesting missing context rather than acting."
+        },
+        {
+          "term": "HITL",
+          "def": "Human-in-the-loop: a human approves, edits, or supervises key steps."
+        }
+      ]
+    }
+  ]
+}
