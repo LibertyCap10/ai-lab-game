@@ -1,38 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const mono =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
 
-function isTouchDevice() {
+function detectTouchDevice() {
   if (typeof window === "undefined") return false;
+  const nav: any = navigator;
   return (
     "ontouchstart" in window ||
-    (navigator as any).maxTouchPoints > 0 ||
-    (navigator as any).msMaxTouchPoints > 0
+    (nav?.maxTouchPoints ?? 0) > 0 ||
+    (nav?.msMaxTouchPoints ?? 0) > 0
   );
 }
 
-export default function TouchControls() {
-  const [enabled, setEnabled] = useState(false);
+type Props = {
+  enabled?: boolean; // parent can force on/off
+};
+
+export default function TouchControls({ enabled }: Props) {
+  const [active, setActive] = useState(false);
 
   useEffect(() => {
-    setEnabled(isTouchDevice());
-  }, []);
+    // If parent provides enabled, trust it. Otherwise auto-detect.
+    if (enabled !== undefined) setActive(enabled);
+    else setActive(detectTouchDevice());
+  }, [enabled]);
 
-  const baseRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef(false);
   const originRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const sendMove = (dx: number, dy: number) => {
     window.dispatchEvent(new CustomEvent("ai-lab-move", { detail: { dx, dy } }));
   };
-
   const resetMove = () => sendMove(0, 0);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!enabled) return;
+    if (!active) return;
     activeRef.current = true;
     (e.currentTarget as any).setPointerCapture?.(e.pointerId);
     originRef.current = { x: e.clientX, y: e.clientY };
@@ -40,7 +45,7 @@ export default function TouchControls() {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!enabled) return;
+    if (!active) return;
     if (!activeRef.current) return;
 
     const ox = originRef.current.x;
@@ -49,7 +54,6 @@ export default function TouchControls() {
     const dx = e.clientX - ox;
     const dy = e.clientY - oy;
 
-    // deadzone + clamp
     const DEAD = 8;
     const MAX = 44;
 
@@ -57,21 +61,14 @@ export default function TouchControls() {
     const cdy = Math.max(-MAX, Math.min(MAX, dy));
 
     const mag = Math.sqrt(cdx * cdx + cdy * cdy);
+    if (mag < DEAD) return sendMove(0, 0);
 
-    if (mag < DEAD) {
-      sendMove(0, 0);
-      return;
-    }
-
-    // Normalize into [-1..1] for game
-    const ndx = cdx / MAX;
-    const ndy = cdy / MAX;
-
-    sendMove(ndx, ndy);
+    // Normalize into [-1..1]
+    sendMove(cdx / MAX, cdy / MAX);
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
-    if (!enabled) return;
+    if (!active) return;
     activeRef.current = false;
     resetMove();
     try {
@@ -83,7 +80,7 @@ export default function TouchControls() {
     window.dispatchEvent(new CustomEvent("ai-lab-interact"));
   };
 
-  if (!enabled) return null;
+  if (!active) return null;
 
   return (
     <div
@@ -91,21 +88,20 @@ export default function TouchControls() {
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
-        zIndex: 35,
+        zIndex: 120, // ✅ always on top (except your full-screen modals)
         fontFamily: mono,
       }}
     >
       {/* Left thumb stick */}
       <div
-        ref={baseRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         style={{
           position: "fixed",
-          left: 16,
-          bottom: 18,
+          left: 14,
+          bottom: 14,
           width: 132,
           height: 132,
           borderRadius: 999,
@@ -114,6 +110,8 @@ export default function TouchControls() {
           boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
           pointerEvents: "auto",
           touchAction: "none",
+          userSelect: "none",
+          WebkitUserSelect: "none",
         }}
       >
         <div
@@ -140,14 +138,14 @@ export default function TouchControls() {
         </div>
       </div>
 
-      {/* Right side buttons */}
+      {/* Right-side buttons */}
       <div
         style={{
           position: "fixed",
-          right: 16,
-          bottom: 26,
+          right: 14,
+          bottom: 18,
           display: "grid",
-          gap: 12,
+          gap: 10,
           pointerEvents: "auto",
         }}
       >
@@ -162,14 +160,11 @@ export default function TouchControls() {
             color: "#e5e7eb",
             fontWeight: 900,
             letterSpacing: 0.6,
+            touchAction: "manipulation",
           }}
         >
           INTERACT
         </button>
-
-        <div style={{ fontSize: 11, opacity: 0.7, textAlign: "right" }}>
-          Tip: Tap Interact near stations/NPCs
-        </div>
       </div>
     </div>
   );
