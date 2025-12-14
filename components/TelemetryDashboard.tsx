@@ -77,6 +77,7 @@ export default function TelemetryDashboard() {
   const [err, setErr] = useState<string | null>(null);
   const [simTraffic, setSimTraffic] = useState(true);
 
+  // ✅ Works in both DOM + Node typings (Vercel build)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -97,12 +98,7 @@ export default function TelemetryDashboard() {
       const s = await apiGet<TelemetrySummary>(`/api/telemetry/summary?window=${timeWindow}`);
       setSummary(s);
 
-      const metrics = [
-        "latency_p95",
-        "error_rate",
-        "citation_coverage",
-        "eval_pass_rate"
-      ] as const;
+      const metrics = ["latency_p95", "error_rate", "citation_coverage", "eval_pass_rate"] as const;
 
       const out: Record<string, TelemetryPoint[]> = {};
       await Promise.all(
@@ -123,10 +119,9 @@ export default function TelemetryDashboard() {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(refresh, 6000);
 
-    // cleanup
     return () => {
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, timeWindow]);
@@ -134,7 +129,7 @@ export default function TelemetryDashboard() {
   // Simulated traffic: posts synthetic telemetry based on your current "choices" (meters + RAG/Eval state)
   useEffect(() => {
     if (!open || !simTraffic) {
-      if (simRef.current) window.clearInterval(simRef.current);
+      if (simRef.current) clearInterval(simRef.current);
       simRef.current = null;
       return;
     }
@@ -143,7 +138,6 @@ export default function TelemetryDashboard() {
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
     async function tick() {
-      // Latency is shaped by "cost" and "risk" (more safety checks/tooling) and improved by reliability.
       const latency = clamp(
         420 + meters.cost * 6 + meters.risk * 4 - meters.reliability * 2 + rnd(-80, 140),
         120,
@@ -156,8 +150,11 @@ export default function TelemetryDashboard() {
       const citations = rag ? rag.citations.length : 0;
       const passRate = evalRes ? evalRes.passRate : null;
 
-      // Escalation rises when risk is high or eval is weak.
-      const escProb = clamp(0.02 + meters.risk / 160 + (passRate !== null ? (80 - passRate) / 200 : 0.05), 0, 0.6);
+      const escProb = clamp(
+        0.02 + meters.risk / 160 + (passRate !== null ? (80 - passRate) / 200 : 0.05),
+        0,
+        0.6
+      );
       const escalated = Math.random() < escProb;
 
       await apiPost("/api/telemetry/event", {
@@ -170,19 +167,21 @@ export default function TelemetryDashboard() {
           citations,
           escalated,
           ragPassed: rag ? rag.passed : null,
-          evalPassRate: passRate
-        }
+          evalPassRate: passRate,
+        },
       });
     }
 
-    simRef.current = window.setInterval(() => {
+    // ✅ Use global setInterval/clearInterval (typed to ReturnType<typeof setInterval>)
+    if (simRef.current) clearInterval(simRef.current);
+    simRef.current = setInterval(() => {
       tick().catch(() => {
         /* ignore */
       });
     }, 1600);
 
     return () => {
-      if (simRef.current) window.clearInterval(simRef.current);
+      if (simRef.current) clearInterval(simRef.current);
       simRef.current = null;
     };
   }, [open, simTraffic, meters, rag, evalRes]);
@@ -199,7 +198,7 @@ export default function TelemetryDashboard() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 16
+        padding: 16,
       }}
       onClick={() => setOpen(false)}
     >
@@ -215,14 +214,15 @@ export default function TelemetryDashboard() {
           padding: 16,
           fontFamily: mono,
           color: "#e5e7eb",
-          boxShadow: "0 30px 90px rgba(0,0,0,0.6)"
+          boxShadow: "0 30px 90px rgba(0,0,0,0.6)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
           <div>
             <div style={{ fontWeight: 900, color: "#67e8f9" }}>TELEMETRY DASHBOARD</div>
             <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
-              Metrics Station · latency, errors, citations, escalations. Trends update as you run RAG/Eval and as simulated traffic flows.
+              Metrics Station · latency, errors, citations, escalations. Trends update as you run RAG/Eval and as simulated
+              traffic flows.
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -234,7 +234,7 @@ export default function TelemetryDashboard() {
                 color: "#e5e7eb",
                 borderRadius: 10,
                 padding: "8px 10px",
-                cursor: "pointer"
+                cursor: "pointer",
               }}
             >
               Refresh
@@ -247,7 +247,7 @@ export default function TelemetryDashboard() {
                 color: "#e5e7eb",
                 borderRadius: 10,
                 padding: "8px 10px",
-                cursor: "pointer"
+                cursor: "pointer",
               }}
             >
               Close
@@ -270,7 +270,7 @@ export default function TelemetryDashboard() {
                 cursor: "pointer",
                 fontWeight: 900,
                 letterSpacing: 0.3,
-                fontSize: 12
+                fontSize: 12,
               }}
             >
               {w}
@@ -278,11 +278,7 @@ export default function TelemetryDashboard() {
           ))}
 
           <label style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-            <input
-              type="checkbox"
-              checked={simTraffic}
-              onChange={(e) => setSimTraffic(e.target.checked)}
-            />
+            <input type="checkbox" checked={simTraffic} onChange={(e) => setSimTraffic(e.target.checked)} />
             <span style={{ opacity: 0.9 }}>Simulated traffic</span>
           </label>
         </div>
@@ -295,7 +291,7 @@ export default function TelemetryDashboard() {
               border: "1px solid rgba(248,113,113,0.55)",
               padding: 10,
               borderRadius: 12,
-              fontSize: 12
+              fontSize: 12,
             }}
           >
             <div style={{ fontWeight: 900, color: "#fecaca" }}>Telemetry error</div>
@@ -316,7 +312,7 @@ export default function TelemetryDashboard() {
               padding: 12,
               borderRadius: 14,
               border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.04)"
+              background: "rgba(255,255,255,0.04)",
             }}
           >
             <div>
@@ -329,28 +325,72 @@ export default function TelemetryDashboard() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
-            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.04)",
+              }}
+            >
               <div style={{ fontSize: 11, opacity: 0.85 }}>Latency (p95)</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{formatMs(summary?.latencyP95 ?? null)}</div>
-              <div style={{ marginTop: 6 }}><Sparkline data={series["latency_p95"] || []} /></div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
+                {formatMs(summary?.latencyP95 ?? null)}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <Sparkline data={series["latency_p95"] || []} />
+              </div>
             </div>
 
-            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.04)",
+              }}
+            >
               <div style={{ fontSize: 11, opacity: 0.85 }}>Error rate</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{summary ? pct(summary.errorRate) : "—"}</div>
-              <div style={{ marginTop: 6 }}><Sparkline data={series["error_rate"] || []} /></div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
+                {summary ? pct(summary.errorRate) : "—"}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <Sparkline data={series["error_rate"] || []} />
+              </div>
             </div>
 
-            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.04)",
+              }}
+            >
               <div style={{ fontSize: 11, opacity: 0.85 }}>Citation coverage</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{summary ? pct(summary.citationCoverage) : "—"}</div>
-              <div style={{ marginTop: 6 }}><Sparkline data={series["citation_coverage"] || []} /></div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
+                {summary ? pct(summary.citationCoverage) : "—"}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <Sparkline data={series["citation_coverage"] || []} />
+              </div>
             </div>
 
-            <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.04)",
+              }}
+            >
               <div style={{ fontSize: 11, opacity: 0.85 }}>Eval pass rate</div>
-              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>{evalRes ? `${evalRes.passRate}%` : "—"}</div>
-              <div style={{ marginTop: 6 }}><Sparkline data={series["eval_pass_rate"] || []} /></div>
+              <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4 }}>
+                {evalRes ? `${evalRes.passRate}%` : "—"}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <Sparkline data={series["eval_pass_rate"] || []} />
+              </div>
             </div>
           </div>
 
@@ -363,7 +403,7 @@ export default function TelemetryDashboard() {
               borderRadius: 14,
               border: "1px solid rgba(255,255,255,0.08)",
               background: "rgba(255,255,255,0.03)",
-              fontSize: 12
+              fontSize: 12,
             }}
           >
             <div>
@@ -376,9 +416,7 @@ export default function TelemetryDashboard() {
             </div>
             <div>
               <div style={{ opacity: 0.8 }}>Constraints target</div>
-              <div style={{ marginTop: 4, opacity: 0.92 }}>
-                p95 &lt; 800ms · cite evidence · escalate on uncertainty
-              </div>
+              <div style={{ marginTop: 4, opacity: 0.92 }}>p95 &lt; 800ms · cite evidence · escalate on uncertainty</div>
             </div>
           </div>
         </div>
